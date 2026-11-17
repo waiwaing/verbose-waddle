@@ -1,0 +1,81 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>PhotoSwipe removal repro</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/photoswipe/5.4.4/photoswipe.min.css">
+    <style>
+        body { font-family: system-ui, sans-serif; max-width: 40rem; margin: 2rem auto; padding: 0 1rem; }
+        .slide { position: absolute; inset: 10%; display: grid; place-items: center; font-size: 30vmin; font-weight: bold; color: #fff; text-shadow: 0 0 .05em #000; }
+        .pswp__status { position: absolute; left: 50%; bottom: 1rem; transform: translateX(-50%); padding: .5rem 1rem;
+            border-radius: .5rem; background: #000c; color: #fff; font: 1rem system-ui, sans-serif; white-space: nowrap; }
+        .pswp__status.mismatch { background: #c00; }
+        .pswp__remove { width: auto !important; padding: 0 1rem !important; color: #fff; font: bold 1rem system-ui, sans-serif; }
+    </style>
+</head>
+<body>
+<h1>PhotoSwipe 5.4.4: removing the current slide</h1>
+<p>Removes the current item from <code>pswp.options.dataSource</code>, then calls
+    <code>refreshSlideContent</code> for the previous, current and next indexes, as the docs suggest.</p>
+<ol>
+    <li>Open the gallery. It opens on <b>A</b>, and PhotoSwipe preloads B and C (<code>preload: [1, 2]</code>).</li>
+    <li>Click <b>Remove current</b>. A is removed and B is shown. The items are now B, C, D, E, F.</li>
+    <li>Press → twice. The second press should show <b>D</b>, but it shows <b>C</b> again: the content cached
+        for index 2 is still the old item at that index. D is never shown.</li>
+</ol>
+<p>The label at the bottom compares what's rendered (<code>currSlide.content.data</code>) with the item at the
+    current index (<code>currSlide.data</code>), and goes red when they differ.</p>
+<button id="open" type="button">Open gallery</button>
+
+<script type="module">
+    import PhotoSwipe from "https://cdnjs.cloudflare.com/ajax/libs/photoswipe/5.4.4/photoswipe.esm.min.js";
+
+    const colours = {A: "red", B: "orange", C: "yellow", D: "green", E: "blue", F: "purple"};
+
+    document.getElementById("open").addEventListener("click", () => {
+        const dataSource = Object.entries(colours).map(([label, colour]) => ({
+            label,
+            html: `<div class="slide" style="background: ${colour}">${label}</div>`,
+        }));
+
+        const pswp = new PhotoSwipe({dataSource, index: 0, loop: false});
+
+        pswp.on("uiRegister", () => {
+            pswp.ui.registerElement({
+                name: "remove",
+                className: "pswp__remove",
+                order: 9,
+                isButton: true,
+                html: "Remove current",
+                onClick: () => {
+                    const index = pswp.currIndex;
+                    pswp.options.dataSource.splice(index, 1);
+
+                    for (const i of [index - 1, index, index + 1]) {
+                        pswp.refreshSlideContent(i);
+                    }
+                },
+            });
+
+            pswp.ui.registerElement({
+                name: "status",
+                className: "pswp__status",
+                appendTo: "root",
+                order: 10,
+                onInit: (el) => {
+                    pswp.on("change", () => {
+                        const rendered = pswp.currSlide?.content.data.label;
+                        const item = pswp.currSlide?.data.label;
+                        el.textContent = `Rendered: ${rendered} · item at index ${pswp.currIndex}: ${item}`;
+                        el.classList.toggle("mismatch", rendered !== item);
+                    });
+                },
+            });
+        });
+
+        pswp.init();
+    });
+</script>
+</body>
+</html>
